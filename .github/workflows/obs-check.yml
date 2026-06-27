@@ -1,0 +1,43 @@
+name: OBS Not Kontrolü
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # her 15 dakika
+  workflow_dispatch:           # elle de tetiklenebilir
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Playwright Chromium kur
+        run: python -m playwright install chromium --with-deps
+
+      - name: State dosyasını indir (cache)
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: obs-state-${{ github.run_id }}
+          restore-keys: |
+            obs-state-
+
+      - name: Botu çalıştır
+        env:
+          OBS_USERNAME: ${{ secrets.OBS_USERNAME }}
+          OBS_PASSWORD: ${{ secrets.OBS_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py
+
+      - name: Log göster
+        if: always()
+        run: cat bot.log 2>/dev/null || echo "Log yok"
