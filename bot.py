@@ -180,6 +180,54 @@ def send_telegram(message: str) -> None:
         log.error("Telegram send failed: %s", resp.text)
 
 
+def check_telegram_commands(state: dict) -> bool:
+    """Poll Telegram for /kontrol. Returns True if found. Updates offset in state."""
+    offset = state.get("last_update_id", 0)
+    try:
+        resp = requests.get(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
+            params={"offset": offset + 1, "timeout": 5},
+            timeout=10,
+        )
+        updates = resp.json().get("result", []) if resp.ok else []
+    except Exception as e:
+        log.warning("getUpdates failed: %s", e)
+        return False
+
+    manual = False
+    for upd in updates:
+        uid = upd.get("update_id", 0)
+        state["last_update_id"] = max(state.get("last_update_id", 0), uid)
+        text = ((upd.get("message") or {}).get("text") or "").strip()
+        if text.startswith("/kontrol"):
+            log.info("Received /kontrol (update_id=%d)", uid)
+            manual = True
+
+    return manual
+
+
+def format_status(grades: list[dict]) -> str:
+    """Current grade summary for /kontrol response."""
+    lines = ["📋 <b>Mevcut Not Durumu</b>\n"]
+    for g in grades:
+        def find(keys):
+            for k, v in g.items():
+                if any(key in k.lower() for key in keys) and v and v.strip():
+                    return v.strip()
+            return ""
+
+        kod  = find(["ders kodu", "kod"])
+        ad   = find(["ders ad", "ad"])
+        not_ = find(["not"])
+        dur  = find(["sonuç.durum", "sonuc.durum", "sonu"])
+
+        if not_ and not_.strip():
+            lines.append(f"✅ <b>{kod}</b> {ad} — <b>{not_}</b>")
+        else:
+            lines.append(f"⏳ <b>{kod}</b> {ad} — {dur or 'Bekleniyor'}")
+    return "\n".join(lines)
+
+
 def format_message(new_grades: list[dict]) -> str:
     lines = ["📢 <b>Yeni Not Açıklandı!</b>"]
     for g in new_grades:
@@ -213,41 +261,47 @@ def run() -> None:
         log.error("Missing env vars. Check .env file.")
         return
 
+    state = load_state()
+
+    # Check for /kontrol command before OBS fetch
+    manual_check = check_telegram_commands(state)
+
     current_grades = fetch_grades_playwright()
 
     if not current_grades:
         log.warning("No grades fetched. Check bot.log for details.")
+        save_state(state)
         return
 
-    state = load_state()
     known_keys = set(state.get("grade_keys", []))
     first_run = not known_keys
-
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if first_run:
-        # İlk çalışma: mevcut durumu kaydet, bildirim yok
         log.info("First run — saving %d grades as baseline, no notification", len(current_grades))
+        send_telegram("✅ Bot aktif! Mevcut notlar kaydedildi, yeni not açıklandığında bildirim alacaksın.")
     else:
         new_with_letters = [g for g in current_grades if grade_key(g) not in known_keys and has_letter_grade(g)]
 
         if new_with_letters:
             log.info("New graded results: %d", len(new_with_letters))
             send_telegram(format_message(new_with_letters))
-            state["last_no_change_notify"] = now_iso  # saat sayacını sıfırla
+            state["last_no_change_notify"] = now_iso
         else:
             log.info("No new graded results")
-            # Her NO_CHANGE_NOTIFY_HOURS saatte bir "henüz açıklanmadı" bildir
             last_notify = state.get("last_no_change_notify")
             should_notify = True
             if last_notify:
-                last_dt = datetime.fromisoformat(last_notify)
-                elapsed_hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+                elapsed_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(last_notify)).total_seconds() / 3600
                 should_notify = elapsed_hours >= NO_CHANGE_NOTIFY_HOURS
 
             if should_notify:
                 send_telegram("⏳ Henüz yeni bir sınav sonucu açıklanmadı.")
                 state["last_no_change_notify"] = now_iso
+
+        # /kontrol → mevcut durum özeti gönder
+        if manual_check:
+            send_telegram(format_status(current_grades))
 
     state["grade_keys"] = [grade_key(g) for g in current_grades]
     state["grades"] = current_grades
