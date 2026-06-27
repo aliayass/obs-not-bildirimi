@@ -1,13 +1,14 @@
-name: OBS Not Kontrolü
+name: OBS Grade Check
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # her 15 dakika
-  workflow_dispatch:           # elle de tetiklenebilir
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,13 +17,13 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Bağımlılıkları kur
+      - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Playwright Chromium kur
+      - name: Install Playwright Chromium
         run: python -m playwright install chromium --with-deps
 
-      - name: State dosyasını indir (cache)
+      - name: Restore state cache
         uses: actions/cache@v4
         with:
           path: state.json
@@ -30,7 +31,7 @@ jobs:
           restore-keys: |
             obs-state-
 
-      - name: Botu çalıştır
+      - name: Run bot
         env:
           OBS_USERNAME: ${{ secrets.OBS_USERNAME }}
           OBS_PASSWORD: ${{ secrets.OBS_PASSWORD }}
@@ -38,6 +39,6 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python bot.py
 
-      - name: Log göster
+      - name: Show log
         if: always()
-        run: cat bot.log 2>/dev/null || echo "Log yok"
+        run: cat bot.log 2>/dev/null || echo "No log"
