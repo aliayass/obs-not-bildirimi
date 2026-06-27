@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
@@ -204,6 +205,9 @@ def format_message(new_grades: list[dict]) -> str:
     return "\n".join(lines)
 
 
+NO_CHANGE_NOTIFY_HOURS = 5  # "henüz açıklanmadı" mesajı kaç saatte bir gitsin
+
+
 def run() -> None:
     if not all([OBS_USERNAME, OBS_PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
         log.error("Missing env vars. Check .env file.")
@@ -217,14 +221,33 @@ def run() -> None:
 
     state = load_state()
     known_keys = set(state.get("grade_keys", []))
+    first_run = not known_keys
 
-    new_with_letters = [g for g in current_grades if grade_key(g) not in known_keys and has_letter_grade(g)]
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-    if new_with_letters:
-        log.info("New graded results: %d", len(new_with_letters))
-        send_telegram(format_message(new_with_letters))
+    if first_run:
+        # İlk çalışma: mevcut durumu kaydet, bildirim yok
+        log.info("First run — saving %d grades as baseline, no notification", len(current_grades))
     else:
-        log.info("No new graded results")
+        new_with_letters = [g for g in current_grades if grade_key(g) not in known_keys and has_letter_grade(g)]
+
+        if new_with_letters:
+            log.info("New graded results: %d", len(new_with_letters))
+            send_telegram(format_message(new_with_letters))
+            state["last_no_change_notify"] = now_iso  # saat sayacını sıfırla
+        else:
+            log.info("No new graded results")
+            # Her NO_CHANGE_NOTIFY_HOURS saatte bir "henüz açıklanmadı" bildir
+            last_notify = state.get("last_no_change_notify")
+            should_notify = True
+            if last_notify:
+                last_dt = datetime.fromisoformat(last_notify)
+                elapsed_hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+                should_notify = elapsed_hours >= NO_CHANGE_NOTIFY_HOURS
+
+            if should_notify:
+                send_telegram("⏳ Henüz yeni bir sınav sonucu açıklanmadı.")
+                state["last_no_change_notify"] = now_iso
 
     state["grade_keys"] = [grade_key(g) for g in current_grades]
     state["grades"] = current_grades
