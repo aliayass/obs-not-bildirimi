@@ -25,6 +25,8 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 CAS_LOGIN_URL = "https://jasig.firat.edu.tr/cas/login?service=https://obs.firat.edu.tr/oibs/std"
 OBS_GRADES_FRAME = "not_listesi_op.aspx"
+OBS_MENU_PARENT = "Ders ve Dönem İşlemleri"
+OBS_MENU_CHILD = "Not Listesi"
 STATE_FILE = "state.json"
 
 LETTER_GRADES = {"AA", "BA", "BB", "CB", "CC", "DC", "DD", "FD", "FF", "DZ", "YT", "YZ", "BT", "MU", "G", "K"}
@@ -73,9 +75,9 @@ def fetch_grades_playwright() -> list[dict]:
             # Navigate to grades page
             # Open Not Listesi via sidebar menu click
             log.info("Opening Not Listesi...")
-            page.get_by_text("Ders ve Dönem İşlemleri").first.click()
+            page.get_by_text(OBS_MENU_PARENT).first.click()
             page.wait_for_timeout(800)
-            page.get_by_text("Not Listesi").first.click()
+            page.get_by_text(OBS_MENU_CHILD).first.click()
             page.wait_for_load_state("networkidle", timeout=20000)
             page.wait_for_timeout(1500)
 
