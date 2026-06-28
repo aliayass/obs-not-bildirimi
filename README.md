@@ -73,7 +73,7 @@ Fork'ladığın repo → **Settings** → **Secrets and variables** → **Action
 
 Repo → **Actions** sekmesi → **I understand my workflows, enable them** butonuna bas.
 
-Hepsi bu. Her saat otomatik çalışır. **Actions** sekmesinden logları takip edebilirsin. İstersen **Run workflow** butonuyla manuel de tetikleyebilirsin.
+Hepsi bu. Her 30 dakikada bir otomatik çalışır. **Actions** sekmesinden logları takip edebilirsin. İstersen **Run workflow** butonuyla manuel de tetikleyebilirsin.
 
 ---
 
@@ -81,8 +81,8 @@ Hepsi bu. Her saat otomatik çalışır. **Actions** sekmesinden logları takip 
 
 ```bash
 crontab -e
-# Her saat başı çalıştır:
-0 * * * * cd /path/to/obs-not-bildirimi && python bot.py
+# Her 30 dakikada bir çalıştır:
+*/30 * * * * cd /path/to/obs-not-bildirimi && python bot.py
 ```
 
 ### Kendi Bilgisayarında (Windows)
