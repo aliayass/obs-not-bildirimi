@@ -147,7 +147,42 @@ def _parse_grade_table(page) -> list[dict]:
         if any(entry.values()):
             grades.append(entry)
 
-    return grades
+    return _expand_embedded(grades)
+
+
+def _expand_embedded(grades: list[dict]) -> list[dict]:
+    """OBS renders all courses as tab-delimited text inside a single cell.
+    Detect that pattern and expand each row into its own dict."""
+    expanded = []
+    for g in grades:
+        embedded = False
+        for v in g.values():
+            v = str(v)
+            if "\t" in v and "\n" in v:
+                lines = [l for l in v.split("\n") if l.strip()]
+                if len(lines) >= 2:
+                    col_headers = lines[0].split("\t")
+                    for line in lines[1:]:
+                        cells = line.split("\t")
+                        entry = dict(zip(col_headers, cells))
+                        if any(c.strip() for c in cells):
+                            expanded.append(entry)
+                    embedded = True
+                    break
+        if not embedded:
+            expanded.append(g)
+    return expanded
+
+
+def _find_col(g: dict, keys: list) -> str:
+    """Exact key match first, then substring. Avoids 'not' hitting 'Sınav Notları'."""
+    for k, v in g.items():
+        if any(k.lower() == key for key in keys) and v and str(v).strip():
+            return str(v).strip()
+    for k, v in g.items():
+        if any(key in k.lower() for key in keys) and v and str(v).strip():
+            return str(v).strip()
+    return ""
 
 
 def has_letter_grade(grade: dict) -> bool:
@@ -210,17 +245,13 @@ def format_status(grades: list[dict]) -> str:
     """Current grade summary for /kontrol response."""
     lines = ["📋 <b>Mevcut Not Durumu</b>\n"]
     for g in grades:
-        def find(keys):
-            for k, v in g.items():
-                if any(key in k.lower() for key in keys) and v and v.strip():
-                    return v.strip()
-            return ""
+        kod  = _find_col(g, ["ders kodu", "kod"])
+        ad   = _find_col(g, ["ders adı", "ders ad", "ad"])
+        not_ = _find_col(g, ["not"])
+        dur  = _find_col(g, ["sonuç.durumu", "sonuç.durum", "sonuc.durum", "sonu"])
 
-        kod  = find(["ders kodu", "kod"])
-        ad   = find(["ders ad", "ad"])
-        not_ = find(["not"])
-        dur  = find(["sonuç.durum", "sonuc.durum", "sonu"])
-
+        if not kod and not ad:
+            continue
         if not_ and not_.strip():
             lines.append(f"✅ <b>{kod}</b> {ad} — <b>{not_}</b>")
         else:
@@ -231,24 +262,19 @@ def format_status(grades: list[dict]) -> str:
 def format_message(new_grades: list[dict]) -> str:
     lines = ["📢 <b>Yeni Not Açıklandı!</b>"]
     for g in new_grades:
-        # Find column values by keyword matching (handles encoding variations)
-        def find(keys):
-            for k, v in g.items():
-                if any(key in k.lower() for key in keys) and v and v.strip():
-                    return v.strip()
-            return ""
+        kod   = _find_col(g, ["ders kodu", "kod"])
+        ad    = _find_col(g, ["ders adı", "ders ad", "ad"])
+        not_  = _find_col(g, ["not"])
+        ort   = _find_col(g, ["ort"])
+        durum = _find_col(g, ["durumu", "durum"])
+        sınav = _find_col(g, ["sınav notları", "sınav", "sinav"])
 
-        kod   = find(["ders kodu", "kod"])
-        ad    = find(["ders ad", "ad"])
-        not_  = find(["not"])
-        ort   = find(["ort"])
-        durum = find(["durumu", "durum"])
-        sınav = find(["sınav", "sinav"])
-
+        if not kod and not ad:
+            continue
         lines.append("")
         lines.append(f"<b>{kod} — {ad}</b>")
         if sınav:
-            lines.append(f"{sınav}")
+            lines.append(f"🔢 {sınav}")
         lines.append(f"Not: <b>{not_}</b>  |  Ort: {ort}  |  {durum}")
     return "\n".join(lines)
 
