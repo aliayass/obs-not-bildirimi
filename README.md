@@ -50,14 +50,43 @@ python bot.py
 
 ## Otomatik Çalıştırma
 
-**Linux/Mac (cron):**
+### GitHub Actions ile (Önerilen — Bilgisayar Açık Olmak Zorunda Değil)
+
+Repo fork'lanarak GitHub'ın sunucularında ücretsiz çalıştırılabilir.
+
+**1. Repo'yu Fork'la**
+
+Sağ üstten **Fork** butonuna bas.
+
+**2. Secrets Ekle**
+
+Fork'ladığın repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+| Secret Adı | Değer |
+|---|---|
+| `OBS_USERNAME` | Öğrenci numarası |
+| `OBS_PASSWORD` | OBS şifresi |
+| `TELEGRAM_BOT_TOKEN` | Bot token |
+| `TELEGRAM_CHAT_ID` | Chat ID |
+
+**3. Actions'ı Etkinleştir**
+
+Repo → **Actions** sekmesi → **I understand my workflows, enable them** butonuna bas.
+
+Hepsi bu. Her saat otomatik çalışır. **Actions** sekmesinden logları takip edebilirsin. İstersen **Run workflow** butonuyla manuel de tetikleyebilirsin.
+
+---
+
+### Kendi Bilgisayarında (Linux/Mac)
+
 ```bash
 crontab -e
 # Her saat başı çalıştır:
 0 * * * * cd /path/to/obs-not-bildirimi && python bot.py
 ```
 
-**Windows (Görev Zamanlayıcı):**
+### Kendi Bilgisayarında (Windows)
+
 - Görev Zamanlayıcı → Temel Görev Oluştur
 - Tetikleyici: Günlük, her 1 saatte bir tekrarla
 - Eylem: `python bot.py` (proje klasöründe)
